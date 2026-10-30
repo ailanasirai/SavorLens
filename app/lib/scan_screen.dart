@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import 'dietitian_screen.dart';
 import 'main.dart';
+
+const String _api = 'http://localhost:8000';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -20,8 +24,11 @@ class _ScanScreenState extends State<ScanScreen>
   final ImagePicker _picker = ImagePicker();
   late final AnimationController _scan;
   Uint8List? _bytes;
+  String _fileName = 'meal.jpg';
   bool _analyzing = false;
   bool _showResult = false;
+  Map<String, dynamic>? _result;
+  String? _error;
 
   @override
   void initState() {
@@ -48,7 +55,10 @@ class _ScanScreenState extends State<ScanScreen>
       if (!mounted) return;
       setState(() {
         _bytes = bytes;
+        _fileName = file.name.isEmpty ? 'meal.jpg' : file.name;
         _showResult = false;
+        _result = null;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -60,16 +70,39 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _analyze() async {
+    if (_bytes == null) return;
     setState(() {
       _analyzing = true;
       _showResult = false;
+      _result = null;
+      _error = null;
     });
-    await Future.delayed(const Duration(milliseconds: 2800));
-    if (!mounted) return;
-    setState(() {
-      _analyzing = false;
-      _showResult = true;
-    });
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse('$_api/predict'));
+      req.files.add(
+          http.MultipartFile.fromBytes('file', _bytes!, filename: _fileName));
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      final res = await http.Response.fromStream(streamed);
+      if (res.statusCode != 200) {
+        throw Exception('Server returned ${res.statusCode}');
+      }
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      setState(() {
+        _result = data;
+        _analyzing = false;
+        _showResult = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analyzing = false;
+        _showResult = true;
+        _error =
+        'Could not analyze the photo. Is the backend running on port 8000?';
+      });
+    }
   }
 
   void _openDietitians() {
@@ -77,6 +110,13 @@ class _ScanScreenState extends State<ScanScreen>
       MaterialPageRoute(builder: (_) => const DietitianScreen()),
     );
   }
+
+  String _title(String s) => s
+      .split(' ')
+      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+
+  String _pct(dynamic v) => '${((v as num) * 100).round()}%';
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +373,48 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   Widget _resultCard() {
+    final r = _result;
+    final bool sure = r != null && r['sure'] == true;
+    final List top3 = (r?['top3'] as List?) ?? [];
+
+    String headline;
+    String sub = '';
+    if (_error != null) {
+      headline = 'Something went wrong';
+      sub = _error!;
+    } else if (sure) {
+      headline = _title(r!['dish'].toString());
+      sub = 'Confidence ${_pct(r['confidence'])}';
+    } else {
+      headline = 'Not sure about this meal';
+      sub = 'Try a clearer photo with the dish in the centre.';
+    }
+
+    final others = top3
+        .skip(sure ? 1 : 0)
+        .take(sure ? 2 : 3)
+        .map((e) => '${_title(e['dish'].toString())} ${_pct(e['confidence'])}')
+        .join(', ');
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -351,40 +432,53 @@ class _ScanScreenState extends State<ScanScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.orange.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'DEMO: food model not connected yet',
-              style: GoogleFonts.poppins(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.orange,
-              ),
-            ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              _chip('AI model v1 (12 dishes)', AppColors.green),
+              if (_error == null && !sure)
+                _chip('LOW CONFIDENCE', AppColors.orange),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Dish: not identified yet (demo)',
+            headline,
             style: GoogleFonts.poppins(
-              fontSize: 17,
+              fontSize: 19,
               fontWeight: FontWeight.w700,
               color: AppColors.deepGreen,
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _nutri('Calories'),
-              _nutri('Protein'),
-              _nutri('Carbs'),
-              _nutri('Fat'),
-            ],
+          Text(
+            sub,
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              color: AppColors.ink.withValues(alpha: 0.75),
+            ),
           ),
-          const SizedBox(height: 12),
+          if (_error == null && others.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              sure ? 'Other guesses: $others' : 'Closest guesses: $others',
+              style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                color: AppColors.ink.withValues(alpha: 0.65),
+              ),
+            ),
+          ],
+          if (_error == null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Nutrition estimates: not measured yet. Test accuracy of model v1: 84.7%.',
+              style: GoogleFonts.poppins(
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                color: AppColors.ink.withValues(alpha: 0.65),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
           _GlowButton(
             label: 'Book a dietitian',
             icon: Icons.event_available_rounded,
@@ -393,36 +487,6 @@ class _ScanScreenState extends State<ScanScreen>
             onTap: _openDietitians,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _nutri(String label) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.mint,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              'not measured',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.deepGreen,
-              ),
-            ),
-            Text(
-              label,
-              style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.ink),
-            ),
-          ],
-        ),
       ),
     );
   }

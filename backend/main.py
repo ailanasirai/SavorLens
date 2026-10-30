@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from predict import router as predict_router
+
 load_dotenv()
 
 CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
@@ -20,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(predict_router)
 
 
 class OrderRequest(BaseModel):
