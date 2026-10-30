@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'scan_screen.dart'; // CHANGED: new import
 
 void main() {
   runApp(const SavorLensApp());
@@ -356,11 +357,10 @@ class _Hero extends StatelessWidget {
                     ).animate().fadeIn(delay: 300.ms, duration: 600.ms),
                     const SizedBox(height: 32),
                     _ScanButton(
+                      // CHANGED: opens the Scan screen
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Scan screen coming next!'),
-                          ),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ScanScreen()),
                         );
                       },
                     )

@@ -1,0 +1,30 @@
+{
+  "classes": [
+    "pizza",
+    "sushi",
+    "ramen",
+    "tacos",
+    "lasagna",
+    "hamburger",
+    "fried_rice",
+    "pad_thai",
+    "pancakes",
+    "hummus",
+    "samosa",
+    "gyoza"
+  ],
+  "image_size": 224,
+  "not_sure_threshold": 0.6,
+  "validation_accuracy": 0.822,
+  "test_accuracy": 0.847,
+  "test_photos": 3000,
+  "answered_fraction_at_threshold": 0.83,
+  "accuracy_on_answered": 0.925,
+  "known_limitations": [
+    "hummus is over-predicted (tacos, pancakes, ramen mixed up)",
+    "only 12 dishes; South Asian dishes like karahi, nihari, haleem are not covered yet"
+  ],
+  "datasets": [
+    "Food-101 (Kaggle mirror by K Scott Mader, data (c) original authors)"
+  ]
+}
