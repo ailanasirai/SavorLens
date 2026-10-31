@@ -6,9 +6,17 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from predict import router as predict_router
-
 load_dotenv()
+
+# The food model (/predict) is optional. If predict.py or tensorflow is not
+# installed, the PayPal endpoints still work and /predict is simply disabled.
+try:
+    from predict import router as predict_router
+    PREDICT_AVAILABLE = True
+except ImportError as error:
+    predict_router = None
+    PREDICT_AVAILABLE = False
+    print(f"[SavorLens] /predict disabled (model code not available): {error}")
 
 CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
@@ -23,7 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(predict_router)
+if PREDICT_AVAILABLE:
+    app.include_router(predict_router)
 
 
 class OrderRequest(BaseModel):
@@ -47,7 +56,7 @@ async def get_access_token() -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "predict_enabled": PREDICT_AVAILABLE}
 
 
 @app.post("/paypal/create-order")
