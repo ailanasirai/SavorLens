@@ -8,7 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'main.dart';
 
-const String backendUrl = 'http://localhost:8000';
+
+const String backendUrl = 'https://savorlens.onrender.com';
 
 enum _Stage { review, creating, waiting, capturing, done, failed }
 
@@ -66,7 +67,7 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
       setState(() {
         _stage = _Stage.failed;
         _error =
-        'Could not create the PayPal order. Is the backend running on port 8000? ($e)';
+        'Could not create the PayPal order. The server may be waking up, please wait a minute and try again. ($e)';
       });
     }
   }
